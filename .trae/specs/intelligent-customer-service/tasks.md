@@ -47,19 +47,35 @@
   - `programmatic` TR-3.4: 会话超时时能自动清理
 - **Notes**: 先实现基本功能，再添加凋落算法
 
+## [ ] Task 3.5: 对话记录模块
+- **Priority**: P0
+- **Depends On**: [Task 1, Task 3]
+- **Description**: 
+  - 实现 ConversationHistory 抽象基类
+  - 实现 RedisConversationHistory，完整记录会话历史
+  - 与短期记忆模块分离，独立维护完整记录
+  - 支持获取完整对话记录
+- **Acceptance Criteria Addressed**: [AC-11]
+- **Test Requirements**:
+  - `programmatic` TR-3.5.1: 对话记录模块能完整记录会话历史
+  - `programmatic` TR-3.5.2: 对话记录与短期记忆分离存储
+  - `programmatic` TR-3.5.3: 能获取指定会话的完整对话记录
+
 ## [ ] Task 4: Agent 基础编排与主 API
 - **Priority**: P0
-- **Depends On**: [Task 2, Task 3]
+- **Depends On**: [Task 2, Task 3, Task 3.5]
 - **Description**: 
   - 使用 LangGraph 构建基础 Agent 图
   - 实现 listen、respond、update 等基础节点
   - 实现主 API `/v1/chat` 端点，接收 user_id 和 user_input
   - 在主 API 中集成用户ID与会话映射逻辑
-- **Acceptance Criteria Addressed**: [AC-3, AC-9]
+  - 在 update 节点中同时更新短期记忆和对话记录
+- **Acceptance Criteria Addressed**: [AC-3, AC-9, AC-11]
 - **Test Requirements**:
   - `programmatic` TR-4.1: 基础对话流程能正常工作
   - `programmatic` TR-4.2: 主 API 能正确响应请求
   - `programmatic` TR-4.3: 主 API 接收 user_id 并维护会话
+  - `programmatic` TR-4.4: 对话记录能与短期记忆同步更新
 
 ## [ ] Task 5: 安全审查模块
 - **Priority**: P1
@@ -98,16 +114,20 @@
 
 ## [ ] Task 8: 会话转接与路由
 - **Priority**: P1
-- **Depends On**: [Task 3, Task 4]
+- **Depends On**: [Task 3, Task 3.5, Task 4]
 - **Description**: 
   - 实现会话状态管理（Redis）
   - 实现消息转发器
   - 实现 Agent 转接工具
   - 集成到主 API 路由逻辑
-- **Acceptance Criteria Addressed**: [AC-6]
+  - 转接时调用外部API需包含用户内容、用户ID和完整对话记录
+  - 所有外部API调用输出内容包含输出内容和用户ID
+- **Acceptance Criteria Addressed**: [AC-6, AC-10, AC-12]
 - **Test Requirements**:
-  - `programmatic` TR-8.1: 转接时能正确清空和冻结记忆
+  - `programmatic` TR-8.1: 转接时能正确清空和冻结短期记忆
   - `programmatic` TR-8.2: 转接中的消息能正确转发
+  - `programmatic` TR-8.3: 转接时发送的数据包含用户内容、用户ID和完整对话记录
+  - `programmatic` TR-8.4: 所有外部API调用输出包含输出内容和用户ID
 
 ## [ ] Task 9: 管理 API
 - **Priority**: P2
@@ -128,7 +148,7 @@
   - 端到端测试完整对话流程
   - 压力测试与性能优化
   - 文档编写
-- **Acceptance Criteria Addressed**: [AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9]
+- **Acceptance Criteria Addressed**: [AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-10, AC-11, AC-12]
 - **Test Requirements**:
   - `programmatic` TR-10.1: 完整对话流程能正常工作
   - `programmatic` TR-10.2: 所有核心功能集成测试通过

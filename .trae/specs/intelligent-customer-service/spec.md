@@ -37,6 +37,9 @@
 - **FR-7**: 配置热重载
 - **FR-8**: 管理API（配置、会话、日志、健康检查）
 - **FR-9**: 用户ID与会话映射管理，后端维护会话生命周期
+- **FR-10**: 外部API调用时输出输出内容和用户ID
+- **FR-11**: 对话记录独立模块，与短期记忆分离，完整记录会话历史
+- **FR-12**: 转接人工时发送用户内容、用户ID和完整对话记录
 
 ## Non-Functional Requirements
 - **NFR-1**: 高可用性，支持模型降级和故障转移
@@ -90,7 +93,7 @@
 ### AC-6: 人工转接
 - **Given**: Agent调用转接工具或管理API手动转接
 - **When**: 会话状态变为`transferred`
-- **Then**: 系统清空记忆、冻结写入并转发消息到外部接口
+- **Then**: 系统清空短期记忆、冻结短期记忆写入，并向人工API发送用户内容、用户ID和完整对话记录
 - **Verification**: `programmatic`
 
 ### AC-7: 配置热重载
@@ -111,6 +114,24 @@
 - **Then**: 系统自动维护用户ID与会话的映射，创建或复用会话，超时自动清理
 - **Verification**: `programmatic`
 - **Notes**: 会话超时规则与短期记忆一致
+
+### AC-10: 外部API调用输出
+- **Given**: 系统调用外部API
+- **When**: 调用外部API时
+- **Then**: 输出内容包含输出内容和用户ID
+- **Verification**: `programmatic`
+
+### AC-11: 对话记录独立管理
+- **Given**: 会话进行中
+- **When**: 添加新消息时
+- **Then**: 对话记录模块完整记录会话历史，与短期记忆分离
+- **Verification**: `programmatic`
+
+### AC-12: 转接人工发送完整记录
+- **Given**: 触发人工转接
+- **When**: 发送数据到人工API
+- **Then**: 发送内容包含用户内容、用户ID和完整对话记录
+- **Verification**: `programmatic`
 
 ## Open Questions
 - [ ] 是否需要支持更多AI供应商？
