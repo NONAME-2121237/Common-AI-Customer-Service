@@ -30,17 +30,21 @@
   - `programmatic` TR-2.2: TaskExecutor 能执行任务并处理降级
 - **Notes**: 优先实现 OpenAI 兼容供应商
 
-## [ ] Task 3: 短期记忆模块
+## [ ] Task 3: 短期记忆模块与会话管理
 - **Priority**: P0
 - **Depends On**: [Task 1]
 - **Description**: 
   - 实现 Memory 抽象基类
   - 实现 RedisScoreMemory，支持基本存储与召回
   - 实现记忆冻结功能
-- **Acceptance Criteria Addressed**: [AC-3]
+  - 实现用户ID与会话映射管理（Redis）
+  - 实现会话超时自动清理
+- **Acceptance Criteria Addressed**: [AC-3, AC-9]
 - **Test Requirements**:
   - `programmatic` TR-3.1: 能正确存储和加载会话消息
   - `programmatic` TR-3.2: 记忆冻结时不允许写入
+  - `programmatic` TR-3.3: 同一用户ID能复用同一会话
+  - `programmatic` TR-3.4: 会话超时时能自动清理
 - **Notes**: 先实现基本功能，再添加凋落算法
 
 ## [ ] Task 4: Agent 基础编排与主 API
@@ -49,11 +53,13 @@
 - **Description**: 
   - 使用 LangGraph 构建基础 Agent 图
   - 实现 listen、respond、update 等基础节点
-  - 实现主 API `/v1/chat` 端点
-- **Acceptance Criteria Addressed**: [AC-3]
+  - 实现主 API `/v1/chat` 端点，接收 user_id 和 user_input
+  - 在主 API 中集成用户ID与会话映射逻辑
+- **Acceptance Criteria Addressed**: [AC-3, AC-9]
 - **Test Requirements**:
   - `programmatic` TR-4.1: 基础对话流程能正常工作
   - `programmatic` TR-4.2: 主 API 能正确响应请求
+  - `programmatic` TR-4.3: 主 API 接收 user_id 并维护会话
 
 ## [ ] Task 5: 安全审查模块
 - **Priority**: P1
@@ -122,7 +128,7 @@
   - 端到端测试完整对话流程
   - 压力测试与性能优化
   - 文档编写
-- **Acceptance Criteria Addressed**: [AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8]
+- **Acceptance Criteria Addressed**: [AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9]
 - **Test Requirements**:
   - `programmatic` TR-10.1: 完整对话流程能正常工作
   - `programmatic` TR-10.2: 所有核心功能集成测试通过
