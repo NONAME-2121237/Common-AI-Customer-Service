@@ -1,0 +1,80 @@
+app:
+  name: "智能客服后端"
+  max_agent_iterations: 5
+
+providers:
+  - id: deepseek_main
+    type: openai_compatible
+    base_url: "https://api.deepseek.com/v1"
+    api_key: ${DEEPSEEK_KEY}
+    models:
+      - name: deepseek-chat
+      - name: deepseek-reasoner
+
+models:
+  flash: "deepseek_main/deepseek-chat"
+  pro: "deepseek_main/deepseek-reasoner"
+  safety: "local_llamaguard/Meta-Llama-Guard-2-8B"
+
+tasks:
+  pre_guard: { model: "safety", fallback: rule_based }
+  intent_classify: { model: "flash" }
+  short_term_plan: { model: "flash" }
+  main_response: { model: "pro" }
+  simple_response: { model: "flash" }
+  post_guard: { model: "safety" }
+
+memory:
+  short_term:
+    storage_limit: 30
+    recall_limit: 6
+    max_age_seconds: 1800
+    scoring:
+      importance_weights:
+        has_order_number: 5
+        requested_remember: 10
+
+session:
+  max_idle_seconds: 1800
+
+routing:
+  transfer:
+    enabled: true
+    auto_release_seconds: 600
+    clear_memory_on_transfer: true
+    freeze_memory_during_transfer: true
+
+forward:
+  url: "https://your-system/messages"
+  method: "POST"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${FORWARD_TOKEN}"
+  timeout: 5
+  retry: 2
+
+push:
+  endpoint: "https://your-push-service/send"
+  headers:
+    Content-Type: "application/json"
+  timeout: 5
+
+admin:
+  api_key: ""
+  log_file: "logs/app.log"
+
+logging:
+  level: "INFO"
+
+prompts:
+  system: |
+    你是一个智能客服助手，负责回答用户的问题。请友好、专业地回答用户的询问。
+    
+    可用工具：
+    - transfer_to_human: 当你无法回答或用户需要人工帮助时调用此工具
+
+  think: |
+    请分析当前对话，决定下一步行动：
+    - direct: 直接回答用户问题
+    - rag: 需要查询知识库
+    - escalate: 需要转接人工客服

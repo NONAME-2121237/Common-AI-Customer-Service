@@ -1,13 +1,13 @@
-- [ ] Checkpoint 1: 项目结构正确创建，依赖安装成功
-- [ ] Checkpoint 2: config.yaml 可正确加载并解析环境变量占位符
-- [ ] Checkpoint 3: 配置管理器支持点号路径读取
-- [ ] Checkpoint 4: 配置修改后热重载生效（<5秒）
-- [ ] Checkpoint 5: Redis 连接池正常工作，会话数据正确存储和查询
-- [ ] Checkpoint 6: 供应商管理器正确创建和管理供应商实例
-- [ ] Checkpoint 7: 模型别名正确解析
-- [ ] Checkpoint 8: 任务执行器各任务正确绑定模型并返回预期结果
-- [ ] Checkpoint 9: 短期记忆凋落算法正确执行（时间因子×0.4 + 重要性×0.6）
-- [ ] Checkpoint 10: 聊天记录独立存储，与短期记忆分离
+- [x] Checkpoint 1: 项目结构正确创建，依赖安装成功
+- [x] Checkpoint 2: config.yaml 可正确加载并解析环境变量占位符
+- [x] Checkpoint 3: 配置管理器支持点号路径读取
+- [x] Checkpoint 4: 配置修改后热重载生效（<5秒）
+- [x] Checkpoint 5: Redis 连接池正常工作，会话数据正确存储和查询
+- [x] Checkpoint 6: 供应商管理器正确创建和管理供应商实例
+- [x] Checkpoint 7: 模型别名正确解析
+- [x] Checkpoint 8: 任务执行器各任务正确绑定模型并返回预期结果
+- [x] Checkpoint 9: 短期记忆凋落算法正确执行（时间因子×0.4 + 重要性×0.6）
+- [x] Checkpoint 10: 聊天记录独立存储，与短期记忆分离
 - [ ] Checkpoint 11: 会话状态正确转换（active→transferred→active）
 - [ ] Checkpoint 12: 转接时清空短期记忆，推送历史记录
 - [ ] Checkpoint 13: 空闲超时后会话正确关闭
