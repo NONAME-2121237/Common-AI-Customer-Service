@@ -2,18 +2,21 @@
 # 智能客服后端 - Product Requirement Document
 
 ## Overview
-- **Summary**: 构建一个生产级智能客服后端系统，支持多供应商AI模型集成、会话管理、记忆凋落、安全审查、知识库检索和人工转接功能。
-- **Purpose**: 提供低成本、高可控的智能客服解决方案，通过任务分级分配不同规模模型，支持人工介入和灵活的配置管理。
+- **Summary**: 构建一个生产级智能客服后端，支持多供应商AI模型、会话管理、记忆凋落、安全审查、知识库检索和人工转接。
+- **Purpose**: 提供低成本高可控的智能客服解决方案，支持任务分级模型分配、人工介入及灵活配置管理。
 - **Target Users**: 企业客服团队、运营人员、技术维护人员
 
 ## Goals
-- 实现多供应商AI模型兼容（OpenAI、Anthropic、Google Vertex等）
+- 实现多供应商AI模型兼容（OpenAI兼容、Anthropic、Google Vertex等）
 - 支持会话转接和人工介入，保护对话隐私
 - 提供带重要性评分的短期记忆自动凋落
 - 实现输入输出双重安全审查
 - 配置驱动并支持热重载，无需重启即可生效
 - 提供完整的管理API用于运维和监控
-- 后端负责用户ID与会话的映射管理，自动维护会话生命周期
+- 后端维护user_id到session_id的映射，前端只需传入user_id
+- 对话记录与短期记忆分离，对话记录完整保存不凋落
+- 所有外部API调用输出包含输出内容和用户ID
+- 转接人工时发送用户内容、用户ID和完整对话记录
 
 ## Non-Goals (Out of Scope)
 - 不实现前端界面（仅提供API）
@@ -36,9 +39,9 @@
 - **FR-6**: 会话状态管理与人工转接
 - **FR-7**: 配置热重载
 - **FR-8**: 管理API（配置、会话、日志、健康检查）
-- **FR-9**: 用户ID与会话映射管理，后端维护会话生命周期
-- **FR-10**: 外部API调用时输出输出内容和用户ID
-- **FR-11**: 对话记录独立模块，与短期记忆分离，完整记录会话历史
+- **FR-9**: 用户ID与会话映射管理，后端维护会话生命周期，前端传入user_id
+- **FR-10**: 对话记录独立模块，与短期记忆分离，完整记录会话历史
+- **FR-11**: 所有外部API调用输出包含输出内容和用户ID
 - **FR-12**: 转接人工时发送用户内容、用户ID和完整对话记录
 
 ## Non-Functional Requirements
@@ -49,7 +52,7 @@
 
 ## Constraints
 - **Technical**: Python 3.10+, FastAPI, LangGraph, Redis
-- **Business**: 开发周期4周，核心功能优先
+- **Business**: 核心功能优先开发
 - **Dependencies**: Dify (知识库), Redis (缓存), 外部AI API
 
 ## Assumptions
@@ -63,75 +66,75 @@
 - **Given**: 系统已启动并加载配置
 - **When**: 用户通过ProviderManager请求模型
 - **Then**: 系统能正确返回对应模型实例并调用成功
-- **Verification**: `programmatic`
+- **Verification**: programmatic
 - **Notes**: 验证多种供应商类型（OpenAI兼容、Anthropic等）
 
 ### AC-2: 任务执行与降级
 - **Given**: 系统已配置任务-模型绑定
 - **When**: 执行任务时主模型失败
 - **Then**: 系统能正确降级到备用模型或规则
-- **Verification**: `programmatic`
+- **Verification**: programmatic
 
 ### AC-3: 短期记忆存储与召回
 - **Given**: 会话已创建并添加消息
 - **When**: 加载会话记忆
-- **Then**: 系统返回最近`recall_limit`条消息
-- **Verification**: `programmatic`
+- **Then**: 系统返回最近recall_limit条消息
+- **Verification**: programmatic
 
 ### AC-4: 记忆凋落算法
-- **Given**: 会话记忆超过`storage_limit`
+- **Given**: 会话记忆超过storage_limit
 - **When**: 添加新消息
 - **Then**: 系统按分数规则自动淘汰低价值消息
-- **Verification**: `programmatic`
+- **Verification**: programmatic
 
 ### AC-5: 安全审查
 - **Given**: 用户发送包含敏感内容的消息
 - **When**: 前置/后置安全审查运行
 - **Then**: 系统正确拒绝或替换违规内容
-- **Verification**: `programmatic`
+- **Verification**: programmatic
 
 ### AC-6: 人工转接
 - **Given**: Agent调用转接工具或管理API手动转接
-- **When**: 会话状态变为`transferred`
+- **When**: 会话状态变为transferred
 - **Then**: 系统清空短期记忆、冻结短期记忆写入，并向人工API发送用户内容、用户ID和完整对话记录
-- **Verification**: `programmatic`
+- **Verification**: programmatic
 
 ### AC-7: 配置热重载
 - **Given**: 配置文件已修改
 - **When**: 文件变化被检测到
 - **Then**: 系统自动重载配置，无需重启服务
-- **Verification**: `programmatic`
+- **Verification**: programmatic
 
 ### AC-8: 管理API功能
 - **Given**: 管理API服务运行
 - **When**: 调用管理接口（配置/会话/日志）
 - **Then**: 接口正常响应并执行对应操作
-- **Verification**: `programmatic`
+- **Verification**: programmatic
 
 ### AC-9: 用户ID与会话管理
 - **Given**: 前端请求包含user_id
 - **When**: 后端接收请求
 - **Then**: 系统自动维护用户ID与会话的映射，创建或复用会话，超时自动清理
-- **Verification**: `programmatic`
+- **Verification**: programmatic
 - **Notes**: 会话超时规则与短期记忆一致
 
-### AC-10: 外部API调用输出
+### AC-10: 对话记录独立管理
+- **Given**: 会话进行中
+- **When**: 添加新消息时
+- **Then**: 对话记录模块完整记录会话历史，与短期记忆分离，不进行凋落
+- **Verification**: programmatic
+
+### AC-11: 外部API调用输出
 - **Given**: 系统调用外部API
 - **When**: 调用外部API时
 - **Then**: 输出内容包含输出内容和用户ID
-- **Verification**: `programmatic`
-
-### AC-11: 对话记录独立管理
-- **Given**: 会话进行中
-- **When**: 添加新消息时
-- **Then**: 对话记录模块完整记录会话历史，与短期记忆分离
-- **Verification**: `programmatic`
+- **Verification**: programmatic
 
 ### AC-12: 转接人工发送完整记录
 - **Given**: 触发人工转接
 - **When**: 发送数据到人工API
-- **Then**: 发送内容包含用户内容、用户ID和完整对话记录
-- **Verification**: `programmatic`
+- **Then**: 发送数据包含用户内容、用户ID和完整对话记录
+- **Verification**: programmatic
 
 ## Open Questions
 - [ ] 是否需要支持更多AI供应商？
