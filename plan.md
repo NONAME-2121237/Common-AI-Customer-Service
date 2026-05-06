@@ -1,411 +1,163 @@
-## 1. 项目定位
+## 一、总体定位
 
-构建一个**生产级智能客服后端**，具备：
+生产级智能客服后端，具备：
 
-- **低成本高可控**：按任务分配不同规模模型（小模型处理意图/安全，大模型处理核心回复）。
-- **多供应商兼容**：同一模型可通过多组 `(base_url, api_key)` 挂载不同账户或服务商，支持 OpenAI 兼容、Anthropic、Google Vertex 等协议。
-- **会话转接/人工介入**：Agent 可主动转接，转接期间消息路由到外部接口，同时**清空短期记忆并冻结记忆写入**，保证人工对话不被记录、机器人重新接手时上下文干净。
-- **短期记忆凋落**：按时间和重要性自动淘汰低价值消息，严格控制上下文长度。
-- **安全审查**：输入输出双重检测，防止注入与角色越狱。
-- **配置驱动 + 热重载**：所有可变参数通过 YAML 管理，修改后无需重启。
-- **管理 API**：独立本机端口，供呈现模块查看/修改配置、会话状态、日志、释放会话等。
-
----
-
-## 2. 整体架构
-
-### 2.1 组件图
-
-```
-[客户端/前端] ──► 主 API (8000) ──► Agent (LangGraph) ──► 任务执行器 ──► 供应商管理器 ──► 外部 AI API
-                   │                       │                 │
-                   │                       ├── 短期记忆(Redis)
-                   │                       ├── 知识库检索(Dify+Qdrant)
-                   │                       ├── 安全审查
-                   │                       └── 转接路由
-                   │
-                   └── 管理 API (8001) ◄── 呈现模块(本地)
-```
-
-### 2.2 核心流程
-
-1. 用户请求 `POST /v1/chat {session_id, user_input}`。
-2. 检查会话路由状态：
-   - 若为 `transferred`：转发消息到外部人工接口；不记录记忆、不调用 Agent。
-   - 若为 `active`：进入 Agent 处理。
-3. Agent 流程：
-   - 加载短期记忆（最近 `recall_limit` 条）。
-   - 前置安全审查（若拒绝则返回固定话术）。
-   - 意图分类（可选，小模型）。
-   - 短期规划（小模型，输出决策 `direct|rag|escalate`）。
-   - 若决策为 `rag`，检索知识库获取片段。
-   - 生成回复（主回复用大模型，简单回复用小模型或模板）。
-   - 后置安全审查（若违规则替换为转接话术）。
-   - 保存本轮对话到短期记忆（自动触发凋落整理）。
-   - 检查是否有输入打断（Redis 标志位），若有则重置并重试。
-4. 若 Agent 调用 `transfer_to_human` 工具：
-   - 清空该会话的短期记忆。
-   - 设置状态为 `transferred`，标记 `memory_frozen=true`。
-   - 返回“正在转接”提示。
-5. 外部人工系统处理完毕后，可通过管理 API `POST /admin/session/release` 将状态重置回 `active`，记忆为空（从头开始）。
+- **多供应商、多模型、任务分级**：根据任务复杂度调用不同规模模型，控制成本。
+- **完整会话生命周期管理**：自动创建、空闲超时关闭、转接人工、记忆清空。
+- **AI 记忆与聊天记录分离**：AI 记忆用于上下文推理（凋落算法），聊天记录用于审计与人工转接。
+- **转接人工行为清晰**：清空 AI 记忆、推送历史记录、实时转发用户消息。
+- **完全配置驱动 + 热重载**：所有可变参数通过 YAML 管理，运行时修改无需重启。
+- **管理 API**：本机回环端口，供呈现模块运维（配置、状态、日志、会话列表/内容、强制操作）。
 
 ---
 
-## 3. 配置管理（热重载）
+## 二、核心模块与职责
 
-### 3.1 配置文件结构
+### 1. 主 API（对外，端口 8000）
+- 端点：`POST /v1/chat`
+- 请求：`{"user_id": "xxx", "message": "..."}`
+- 响应：同步返回 `{"user_id": "xxx", "reply": "..."}`，同时异步推送回复至配置的 `push.endpoint`。
+- 职责：会话映射、状态检查、调用 Agent 编排、触发转接流程、管理空闲超时。
 
-`config.yaml` 示例（核心部分，完整见附录）：
+### 2. 管理 API（对内，端口 8001，监听 127.0.0.1）
+- 提供配置查看/修改、组件健康检查、日志查看、会话列表/聊天内容查询、会话强制释放/转接/删除等操作。
+- 供本地呈现模块调用。
 
-```yaml
-app:
-  name: "智能客服后端"
-  max_agent_iterations: 5
+### 3. 配置管理器
+- 加载 `config.yaml`，支持环境变量占位符（`${VAR}`）。
+- 提供点号路径读取（如 `tasks.main_response.model`）。
+- 支持写入配置并持久化（保留注释），自动触发热重载。
+- 文件监控（轮询）自动重载，也可手动调用。
 
-providers:                       # 供应商分组
-  - id: deepseek_main
-    type: openai_compatible
-    base_url: "https://api.deepseek.com/v1"
-    api_key: ${DEEPSEEK_KEY}
-    models:
-      - name: deepseek-chat
-      - name: deepseek-reasoner
+### 4. 供应商管理器
+- 管理多个供应商实例，每个实例由 `(base_url, api_key, type)` 唯一标识。
+- 每个实例挂载多个模型（如 `flash`、`pro`），模型 ID 格式 `{provider_id}/{model_name}`。
+- 支持全局模型别名（如 `flash` → `deepseek_main/deepseek-chat`）。
+- 统一接口 `chat_completion(messages, model, **params)` 返回纯文本。
+- 热重载时重建全部 Provider 实例（关闭旧连接，创建新连接）。
 
-models:                          # 全局模型别名
-  flash: "deepseek_main/deepseek-chat"
-  pro: "deepseek_main/deepseek-reasoner"
+### 5. 任务执行器
+- 内置任务：`pre_guard`, `intent_classify`, `short_term_plan`, `main_response`, `simple_response`, `post_guard`。
+- 每个任务通过配置绑定一个模型 ID。
+- 执行器根据任务名称获取模型，调用供应商，合并参数，返回结果。支持超时与降级（如回退到规则）。
 
-tasks:                           # 任务 → 模型绑定
-  pre_guard:    { model: "safety", fallback: rule_based }
-  intent_classify: { model: "cheap" }
-  short_term_plan: { model: "flash" }
-  main_response: { model: "pro" }
-  simple_response: { model: "flash" }
-  post_guard:   { model: "safety" }
+### 6. Agent 编排（LangGraph）
+- 状态图节点：`listen` → `classify` → `think` → `decide` → `act` → `respond` → `post_check` → `update` → `check_interrupt`。
+- 支持输入打断：同一会话新消息可中断当前生成，最多可配置打断次数。
+- 所有提示词模板（系统提示、思考提示）从配置读取，热重载生效。
 
-memory:
-  short_term:
-    provider: "redis_score"
-    config:
-      storage_limit: 30          # 总消息条数上限
-      recall_limit: 6            # 每次加载给 LLM 的消息数
-      max_age_seconds: 1800      # 超过此时间进入凋落候补
-      scoring:
-        importance_weights:
-          has_order_number: 5
-          requested_remember: 10
+### 7. 短期记忆（AI 记忆）
+- 独立存储，每个会话一个 Redis JSON 数组，每条消息含 `role`, `content`, `timestamp`, `importance_score`, `metadata`。
+- 凋落算法：每次写入后，若总条数 > `storage_limit` 或存在消息年龄 > `max_age_seconds`，计算保留分数（时间因子×0.4 + 重要性归一化分数×0.6），淘汰低分消息至容量上限。
+- 重要性评分：规则匹配（订单号、关键词“请记住”等）或调用小模型，分值 0~10。
+- `get_history` 返回最近 `recall_limit` 条。
 
-routing:
-  transfer:
-    enabled: true
-    default_target_url: "https://human-support.example.com/webhook"
-    method: "POST"
-    headers: { "Content-Type": "application/json" }
-    timeout: 5
-    auto_release_seconds: 600     # 无消息超时自动释放
-    clear_memory_on_transfer: true
-    freeze_memory_during_transfer: true
+### 8. 聊天记录（审计日志）
+- 独立存储（Redis List 或数据库），保存用户和机器人的所有消息，字段同转发格式（`sender`, `content`, `timestamp`）。
+- 用于人工转接时提供完整历史，以及问题追溯。
+- 不参与 AI 推理。
 
-admin:
-  api_key: ""                     # 留空则无认证（仅本机）
-  log_file: "logs/app.log"
-```
+### 9. 会话路由与转接
+- 每个会话状态：`active` 或 `transferred`。
+- Agent 可调用 `transfer_to_human` 工具触发转接。
+- 转接时：清空短期记忆，设置 `memory_frozen=true`，获取聊天记录，逐条发送到 `forward.url`，状态置为 `transferred`，记录 `transferred_at`、`auto_release_at`。
+- 转接期间：用户消息直接转发到 `forward.url`（不经过 Agent），不写入记忆，更新 `last_active`。
+- 自动释放（转接状态）：超过 `auto_release_seconds` 无活动，状态重置为 `active`，清除 `memory_frozen`（聊天记录保留）。
+- 会话空闲超时（全局）：无论何种状态，超过 `max_idle_seconds` 无活动，彻底关闭会话（删除短期记忆、聊天记录、路由状态、用户映射）。
 
-### 3.2 ConfigManager
-
-- 单例，加载 YAML，支持 `${ENV_VAR}` 替换。
-- `get(path)` 点号路径取值。
-- `save_config(updates)` 合并写入，保留注释。
-- `watch(path, callback)` 注册热重载回调。
-- 文件监控自动 `hot_reload()`。
+### 10. 推送与转发
+- 后端生成回复后，调用配置的 `push.endpoint` 将回复异步推送给前端。
+- 转接时历史记录和实时用户消息，调用 `forward.url` 发送（统一格式）。
 
 ---
 
-## 4. 供应商与模型管理
+## 三、关键流程细则
 
-### 4.1 Provider 抽象
+### 1. 正常对话流程
 
-```python
-class Provider(ABC):
-    async def chat_completion(messages, model, **params) -> str
-    async def stream_chat_completion(...) -> AsyncIterator[str]
-    async def health_check() -> bool
-```
+1. 前端 `POST /v1/chat` 携带 `user_id` 和 `message`。
+2. 后端根据 `user_id` 查找 `session_id`：
+   - 若不存在或会话因空闲超时已关闭，则创建新会话（生成新 `session_id`，初始化空聊天记录、空短期记忆、状态 `active`、`created_at`、`last_active`）。
+3. 更新 `last_active` 为当前时间。
+4. 检查会话状态：
+   - 若为 `transferred`：跳过 Agent，直接调用 `forward.url` 转发用户消息（`sender=user`），返回 200（无回复），流程结束。
+   - 若为 `active`：继续。
+5. 加载短期记忆（最近 `recall_limit` 条）到 Agent 状态。
+6. 前置安全审查（调用 `pre_guard` 任务）：
+   - 若检出注入/越狱 → 返回拒绝话术，保存到聊天记录，异步推送，流程结束。
+7. 意图分类（可选，调用 `intent_classify` 任务）。
+8. 短期规划（调用 `short_term_plan` 任务）→ 输出决策 `direct` / `rag` / `escalate`。
+9. 若决策 `rag` → 调用知识库检索，获得相关片段。
+10. 生成回复：
+    - 若决策 `escalate` → 执行转接流程（见下）。
+    - 否则调用 `main_response` 或 `simple_response` 任务生成回复。
+11. 后置安全审查（调用 `post_guard` 任务）：
+    - 若检出违规 → 替换为转接话术或拒绝话术。
+12. 将本轮对话（用户消息 + AI 回复）写入聊天记录。
+13. 将本轮对话写入短期记忆（若 `memory_frozen=false`），触发凋落整理。
+14. 异步调用 `push.endpoint` 发送回复内容。
+15. 同步返回 `{"user_id": "xxx", "reply": "..."}`。
 
-### 4.2 内置实现
+### 2. 转接人工流程
 
-- `OpenAICompatibleProvider`（支持 DeepSeek, OpenAI, Groq, vLLM, Ollama）
-- `AnthropicProvider`
-- `GoogleVertexProvider`（可选）
+**触发**：Agent 决策 `escalate` 或调用 `transfer_to_human` 工具。
 
-### 4.3 ProviderManager
+**步骤**：
 
-- 根据 `providers` 配置创建实例，挂载多个模型，模型 ID 格式 `{provider_id}/{model_name}`。
-- 支持全局别名（`models` 段）。
-- `get_model(model_id)` 返回 `(Provider, real_model_name, model_config)`。
-- 监听配置变更，热重载时重建所有 Provider 实例。
+1. 清空短期记忆（删除 `memory:session:{session_id}`）。
+2. 设置 `memory_frozen=true`。
+3. 从聊天记录中获取该会话所有消息（按时间正序）。
+4. 对于每条消息，调用 `forward.url` 发送（格式：`session_id`, `user_id`, `sender`, `content`, `timestamp`）。
+5. 将会话路由状态设为 `transferred`，记录 `transferred_at`、`auto_release_at = now + auto_release_seconds`、`last_active`。
+6. 返回同步响应 `{"reply": "您的问题已转接人工客服，请稍候。"}`，并异步推送该消息。
 
----
+**转接期间**：
 
-## 5. 任务分级与执行器
+- 用户新消息 → 直接调用 `forward.url` 发送（`sender=user`），更新 `last_active`，不返回 AI 回复。
+- 外部人工系统应通过自己的渠道回复用户（后端不负责人工回复）。
 
-### 5.1 任务定义
+**释放转接**（回到机器人）：
 
-每个任务绑定一个模型 ID，可配置超时、降级。
+- 自动释放：每次用户消息到达时检查 `now - last_active > auto_release_seconds` 且状态为 `transferred`，则将状态设为 `active`，清除 `memory_frozen`（聊天记录保留，短期记忆已空）。
+- 手动释放：外部系统调用管理 API `POST /admin/session/release`，同样重置状态。
 
-### 5.2 TaskExecutor
+**会话彻底关闭**（空闲超时）：
 
-```python
-async def execute(task_name: str, messages: List[Dict], **params) -> str
-```
+- 每次用户消息到达时检查 `now - last_active > max_idle_seconds`，若超过则执行：
+  - 删除短期记忆
+  - 删除聊天记录
+  - 删除路由状态
+  - 删除 `user_id → session_id` 映射
+  - 然后创建新会话处理当前消息（视为新会话）。
 
-- 读取 `tasks.{task_name}` 获取模型 ID。
-- 通过 `ProviderManager.get_model` 获取 Provider。
-- 调用 `provider.chat_completion`，合并参数。
-- 处理超时，若失败可降级到备用模型或规则。
+### 3. 统一消息转发格式（`forward.url` 和 `push.endpoint` 共用同一格式）
 
-### 5.3 标准任务列表
-
-| 任务 | 用途 | 推荐模型 |
-|------|------|----------|
-| `pre_guard` | 输入安全检测 | 小模型（如 Llama Guard） |
-| `intent_classify` | 意图分类 | 7B 模型 |
-| `short_term_plan` | 决策规划 | 7B~13B 模型 |
-| `main_response` | 复杂回复 | 671B MoE（如 DeepSeek） |
-| `simple_response` | 简单回复 | 小模型或模板 |
-| `post_guard` | 输出安全检测 | 同 pre_guard |
-
----
-
-## 6. 短期记忆（带凋落）
-
-### 6.1 存储结构
-
-Redis 存储 JSON 数组，每条消息包含：
-
-```json
-{
-  "role": "user|assistant",
-  "content": "文本",
-  "timestamp": 1712345678.123,
-  "importance_score": 6.5,
-  "metadata": { "has_order_number": true }
-}
-```
-
-### 6.2 凋落算法
-
-- 每次 `add_messages` 后，若总条数 > `storage_limit` 或存在消息年龄 > `max_age_seconds`，触发整理。
-- 计算每条消息的保留分数：  
-  `score = time_factor * 0.4 + (importance_score/10) * 0.6`  
-  时间因子：年龄 < `max_age_seconds` 时线性衰减（1 → 0.5），超过后继续衰减至 0.1。
-- 按分数升序排序，丢弃分数最低的直至 ≤ `storage_limit`。
-- 保留按时间正序的最终列表。
-
-### 6.3 重要性评分规则
-
-- 通过规则（正则匹配订单号、关键词“请记住”等）或调用小模型计算，分值 0~10。
-- 可配置权重（见 `scoring.importance_weights`）。
-
-### 6.4 记忆冻结（转接时）
-
-- 当会话状态为 `transferred` 且 `memory_frozen=true` 时：
-  - `add_messages` 直接返回（不写入）。
-  - `get_history` 返回空列表（因为已清空且冻结）。
-- 转接时同时执行 `reset`（清空）并设置冻结标志。
-
----
-
-## 7. 会话转接与路由
-
-### 7.1 会话状态（Redis）
-
-Key: `chat:session:{session_id}:route_state`
-
-```json
-{
-  "status": "active" | "transferred",
-  "transferred_at": 1712345678,
-  "auto_release_at": 1712346278,
-  "reason": "agent_request",
-  "memory_frozen": true,
-  "last_active": 1712345678
-}
-```
-
-### 7.2 Agent 转接工具
-
-在 `act` 节点注册工具 `transfer_to_human`，调用时：
-
-- 清空短期记忆（`memory.reset(session_id)`）。
-- 设置状态为 `transferred`，`memory_frozen=true`。
-- 返回固定提示“正在为您转接人工客服…”。
-
-### 7.3 主 API 路由逻辑
-
-```python
-state = await get_route_state(session_id)
-if state and state.status == "transferred":
-    if now - state.last_active > auto_release_seconds:
-        await release_session(session_id)   # 重置为 active
-    else:
-        await forward_to_external(session_id, user_input)
-        return {"reply": "您当前在人工客服，请稍候"}
-# 否则正常 Agent 处理
-```
-
-### 7.4 自动释放
-
-- 每次用户请求时检查 `last_active` 与配置 `auto_release_seconds`。
-- 超时后调用 `release_session`：状态改为 `active`，清除 `memory_frozen`，但不恢复记忆（已清空）。
-
-### 7.5 手动释放（管理 API）
-
-`POST /admin/session/release`  
-可选参数 `clear_memory`（默认 false，但转接时已清空，可直接复位状态）。
-
----
-
-## 8. 知识库检索
-
-- 使用 **Dify** 低代码管理界面，运营人员上传文档、切片。
-- 后端通过 Dify API 检索，返回 `top_k` 片段。
-- 若 Dify 不可用，可配置直接访问 Qdrant。
-
----
-
-## 9. 安全审查
-
-### 9.1 前置审查
-
-- 调用 `pre_guard` 任务（小模型或规则）。
-- 检出注入/越狱 → 返回 `response_templates.rejection`，终止流程。
-
-### 9.2 后置审查
-
-- 调用 `post_guard` 任务。
-- 检出角色偏离/指令泄露 → 替换为转接话术。
-
-### 9.3 规则降级
-
-当模型不可用时使用正则表达式（高危关键词过滤）。
-
----
-
-## 10. Agent 编排（LangGraph）
-
-### 10.1 节点列表
-
-| 节点 | 功能 |
-|------|------|
-| `listen` | 加载记忆，前置审查 |
-| `classify` | 意图识别（可选） |
-| `think` | 规划决策（调用 `short_term_plan` 任务） |
-| `decide` | 规则覆盖（关键词、骚扰） |
-| `act` | 执行工具（RAG 检索/转接） |
-| `respond` | 生成回复（调用 `main_response` 或 `simple_response`） |
-| `post_check` | 后置审查 |
-| `update` | 保存记忆（若未冻结） |
-| `check_interrupt` | 检查是否有新输入打断 |
-
-### 10.2 输入打断
-
-- 使用 Redis 存储 `interrupt:{session_id}` 和 `interrupt_count`。
-- `check_interrupt` 节点若检测到新消息且未超过最大次数，则重置状态并跳回 `listen`。
-
----
-
-## 11. 管理 API（端口 8001，仅 127.0.0.1）
-
-| 方法 | 路径 | 说明 |
+| 字段 | 类型 | 说明 |
 |------|------|------|
-| GET | `/admin/config` | 获取脱敏配置 |
-| PUT | `/admin/config` | 更新扁平配置（如 `tasks.main_response.model=xxx`） |
-| GET | `/admin/config/raw` | 获取原始 YAML |
-| PUT | `/admin/config/raw` | 整体替换 YAML |
-| GET | `/admin/providers` | 列出供应商及模型 |
-| GET | `/admin/models` | 列出所有模型 ID 和别名 |
-| GET | `/admin/tasks` | 查看任务-模型绑定 |
-| POST | `/admin/tasks/{task}/model` | 修改任务模型 |
-| GET | `/admin/components/status` | 组件健康检查 |
-| POST | `/admin/reboot/component` | 重启组件（如 provider_manager） |
-| GET | `/admin/sessions/transferred` | 列出所有转接中的会话 |
-| POST | `/admin/session/release` | 释放会话（重置为 active） |
-| POST | `/admin/session/transfer` | 手动转接并清空记忆 |
-| POST | `/admin/session/clear` | 清空会话短期记忆 |
-| POST | `/admin/session/prune` | 手动触发记忆整理 |
-| GET | `/admin/logs` | 获取日志 |
-| POST | `/admin/logs/level` | 动态调整日志级别 |
+| `session_id` | string | 后端会话标识 |
+| `user_id` | string | 用户标识 |
+| `sender` | string | `"user"` 或 `"agent"` |
+| `content` | string | 消息内容 |
+| `timestamp` | int | Unix 秒级时间戳 |
+
+**注意**：`push.endpoint` 只发送 AI 生成的回复（`sender=agent`），而 `forward.url` 在转接时会发送历史记录和实时用户消息（`sender` 可 `user` 或 `agent`）。
+
+### 4. 会话数据存储（Redis 键约定）
+
+| 用途 | 键格式 | 数据结构 |
+|------|--------|----------|
+| 用户映射 | `user:session:{user_id}` | string（存储 session_id） |
+| 会话路由状态 | `session:{session_id}:state` | hash 或 JSON（status, last_active, created_at, transferred_at, auto_release_at, memory_frozen） |
+| AI 短期记忆 | `memory:session:{session_id}` | JSON 数组 |
+| 聊天记录 | `chatlog:session:{session_id}` | list（左进右出，每条为 JSON 含 sender, content, timestamp） |
 
 ---
 
-## 12. 项目目录结构
-
-```
-customer_service_backend/
-├── app/
-│   ├── main.py                     # 主 API
-│   ├── admin_main.py               # 管理 API
-│   ├── config/
-│   │   ├── loader.py               # ConfigManager
-│   │   ├── hot_reloader.py
-│   │   └── models.py
-│   ├── providers/
-│   │   ├── base.py
-│   │   ├── openai_compatible.py
-│   │   ├── anthropic.py
-│   │   └── manager.py
-│   ├── tasks/
-│   │   ├── executor.py
-│   │   └── builtin.py
-│   ├── agents/
-│   │   ├── graph.py
-│   │   ├── nodes.py
-│   │   └── router.py
-│   ├── memory/
-│   │   ├── base.py
-│   │   └── redis_score.py          # 带凋落与冻结记忆
-│   ├── security/
-│   │   ├── pre_guard.py
-│   │   └── post_guard.py
-│   ├── knowledge/
-│   │   └── retriever.py
-│   ├── routing/
-│   │   ├── state.py                # 会话状态管理
-│   │   └── forwarder.py            # 转发到外部接口
-│   ├── admin/
-│   │   └── router.py
-│   └── utils/
-│       ├── logger.py
-│       └── helpers.py
-├── config.yaml
-├── requirements.txt
-└── run.py
-```
-
----
-
-## 13. 开发优先级（建议）
-
-1. 配置管理器 + 热重载
-2. 供应商管理器（OpenAI 兼容优先）和 TaskExecutor
-3. 短期记忆（基本 FIFO） + Redis
-4. Agent 基础循环（无工具、无知识库）
-5. 安全审查模块（前置+后置）
-6. 知识库检索
-7. 记忆凋落算法 + 重要性评分
-8. 会话转接状态 + 消息路由 + 转接工具
-9. 管理 API（配置修改、会话释放、日志）
-10. 完整集成与压力测试
-
----
-
-## 14. 附录：完整 config.yaml 示例
+## 四、配置体系（`config.yaml` 核心段）
 
 ```yaml
 app:
   name: "智能客服后端"
-  debug: false
   max_agent_iterations: 5
 
 providers:
@@ -413,115 +165,140 @@ providers:
     type: openai_compatible
     base_url: "https://api.deepseek.com/v1"
     api_key: ${DEEPSEEK_KEY}
-    timeout: 30
     models:
       - name: deepseek-chat
-        default_params: { temperature: 0.7, max_tokens: 2048 }
       - name: deepseek-reasoner
-        default_params: { temperature: 0.3, max_tokens: 4096 }
-  - id: siliconflow
-    type: openai_compatible
-    base_url: "https://api.siliconflow.cn/v1"
-    api_key: ${SILICONFLOW_KEY}
-    models:
-      - name: deepseek-ai/DeepSeek-V2.5
-      - name: Qwen/Qwen2-7B-Instruct
-  - id: local_llamaguard
-    type: openai_compatible
-    base_url: "http://localhost:8080/v1"
-    api_key: "dummy"
-    models:
-      - name: Meta-Llama-Guard-2-8B
+  # 可增加其他供应商，如 siliconflow, local_llamaguard 等
 
 models:
   flash: "deepseek_main/deepseek-chat"
   pro: "deepseek_main/deepseek-reasoner"
-  cheap: "siliconflow/Qwen/Qwen2-7B-Instruct"
-  safety: "local_llamaguard/Meta-Llama-Guard-2-8B"
+  safety: "local_llamaguard/Meta-Llama-Guard-2-8B"   # 假设已配置
 
 tasks:
-  pre_guard:
-    model: "safety"
-    fallback: "rule_based"
-    timeout: 2
-  intent_classify:
-    model: "cheap"
-  short_term_plan:
-    model: "flash"
-  main_response:
-    model: "pro"
-  simple_response:
-    model: "flash"
-  post_guard:
-    model: "safety"
+  pre_guard:    { model: "safety", fallback: rule_based }
+  intent_classify: { model: "flash" }
+  short_term_plan: { model: "flash" }
+  main_response: { model: "pro" }
+  simple_response: { model: "flash" }
+  post_guard:   { model: "safety" }
 
 memory:
   short_term:
-    provider: "redis_score"
-    config:
-      url: "redis://localhost:6379/0"
-      ttl: 7200
-      storage_limit: 30
-      recall_limit: 6
-      max_age_seconds: 1800
-      scoring:
-        importance_weights:
-          has_order_number: 5
-          has_product_name: 3
-          requested_remember: 10
-          is_resolved_marker: -5
+    storage_limit: 30
+    recall_limit: 6
+    max_age_seconds: 1800
+    scoring:
+      importance_weights:
+        has_order_number: 5
+        requested_remember: 10
 
-knowledge:
-  provider: "dify"
-  config:
-    api_base: "http://localhost:5001/v1"
-    api_key: ${DIFY_API_KEY}
-    retrieval_top_k: 3
+session:
+  max_idle_seconds: 1800          # 全局会话空闲超时（彻底关闭）
 
 routing:
   transfer:
     enabled: true
-    default_target_url: "https://human-support.example.com/webhook"
-    method: "POST"
-    headers:
-      Content-Type: "application/json"
-    timeout: 5
-    retry: 1
-    auto_release_seconds: 600
+    auto_release_seconds: 600     # 转接后无活动自动回到 active
     clear_memory_on_transfer: true
     freeze_memory_during_transfer: true
 
-security:
-  pre_guard:
-    enabled: true
-    rule_based_fallback: true
-  post_guard:
-    enabled: true
+forward:
+  url: "https://your-system/messages"
+  method: "POST"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${FORWARD_TOKEN}"
+  timeout: 5
+  retry: 2
 
-agent:
-  system_prompt_template: |
-    你是客服助手。使用知识库优先。禁止角色扮演。回复简洁礼貌。
-    对话历史：{history}
-    知识库：{context}
-    用户：{user_input}
-  response_templates:
-    escalate: "已为您转接人工客服。"
-    rejection: "请遵守对话规范。"
-    interrupt_limit: "您输入太快，请稍后重试。"
-  max_interrupt_count: 5
-  escalate_keywords: ["人工客服", "转人工"]
-  think_prompt: |
-    根据对话输出JSON决策：{{"decision": "direct/rag/escalate", "reason": "..."}}
-    对话：{history}
-    输入：{user_input}
+push:
+  endpoint: "https://your-push-service/send"
+  headers:
+    Content-Type: "application/json"
+  timeout: 5
 
 admin:
-  api_key: ""
+  api_key: ""                     # 留空则无认证（本机）
   log_file: "logs/app.log"
 
 logging:
-  file: "logs/app.log"
   level: "INFO"
 ```
 
+**热重载支持**：
+- 修改 `providers` 或 `forward.url` 等网络配置时自动重建连接。
+- 其他参数（任务映射、记忆参数、超时阈值）修改后立即生效，无需重启。
+
 ---
+
+## 五、管理 API 完整端点清单
+
+所有管理 API 监听 `127.0.0.1:8001`，路径前缀 `/admin`。认证方式：若配置了 `admin.api_key`，则请求需携带 `Authorization: Bearer <key>`。
+
+| 方法 | 端点 | 功能 | 请求示例/说明 |
+|------|------|------|----------------|
+| GET | `/admin/config` | 获取脱敏配置 | 返回完整配置，隐藏敏感字段 |
+| PUT | `/admin/config` | 更新扁平配置项 | Body: `{"path": "tasks.main_response.model", "value": "new_model"}` |
+| GET | `/admin/config/raw` | 获取原始 YAML | 返回 `{"raw_yaml": "..."}` |
+| PUT | `/admin/config/raw` | 整体替换 YAML | Body: `{"raw_yaml": "..."}`，持久化并热重载 |
+| GET | `/admin/providers` | 列出供应商及模型 | 返回每个供应商的 id, type, base_url(脱敏), models |
+| GET | `/admin/models` | 列出所有模型 ID 及别名 | 包含 `model_id` -> `provider_id/model_name` 以及别名映射 |
+| GET | `/admin/tasks` | 查看任务-模型绑定 | 每个任务的 `name` 和绑定的 `model_id` |
+| POST | `/admin/tasks/{task_name}/model` | 修改任务模型 | Body: `{"model_id": "new_model"}`，热重载 |
+| GET | `/admin/components/status` | 健康检查 | 返回各组件（供应商、Redis、Dify 等）状态 |
+| POST | `/admin/reboot/component` | 重启组件 | Body: `{"component": "provider_manager"}` |
+| GET | `/admin/sessions` | 获取会话列表 | 支持参数 `status`, `user_id`, `limit`, `offset`, `order_by`, `order` |
+| GET | `/admin/sessions/{session_id}/messages` | 获取会话聊天记录 | 支持参数 `limit`, `offset`；返回完整消息列表 |
+| GET | `/admin/sessions/transferred` | 快捷获取转接中会话 | 相当于 `/admin/sessions?status=transferred` |
+| POST | `/admin/session/release` | 释放转接回到 active | Body: `{"session_id": "xxx"}`，不清聊天记录 |
+| POST | `/admin/session/transfer` | 强制转接（清空记忆并推送历史） | Body: `{"session_id": "xxx", "reason": "manual"}` |
+| POST | `/admin/session/clear` | 清空 AI 短期记忆 | Body: `{"session_id": "xxx"}` |
+| POST | `/admin/session/delete` | 彻底删除会话（所有数据） | Body: `{"session_id": "xxx"}` |
+| GET | `/admin/logs` | 获取最近日志 | 参数 `lines`（默认 100） |
+| POST | `/admin/logs/level` | 调整日志级别 | Body: `{"level": "DEBUG"}` |
+
+**会话列表响应示例**：
+```json
+{
+  "total": 42,
+  "limit": 20,
+  "offset": 0,
+  "sessions": [
+    {
+      "session_id": "sess_abc",
+      "user_id": "user_123",
+      "status": "active",
+      "created_at": 1712345678,
+      "last_active": 1712346000,
+      "memory_frozen": false,
+      "message_count": 12
+    }
+  ]
+}
+```
+
+**聊天内容响应示例**：
+```json
+{
+  "session_id": "sess_abc",
+  "user_id": "user_123",
+  "total": 42,
+  "limit": 20,
+  "offset": 0,
+  "messages": [
+    {"sender": "user", "content": "我要退货", "timestamp": 1712345678},
+    {"sender": "agent", "content": "请提供订单号", "timestamp": 1712345685}
+  ]
+}
+```
+
+---
+
+## 六、设计总结
+
+- **完整会话生命周期**：创建、活动、转接、空闲超时关闭，全程可观测。
+- **记忆与记录分离**：AI 记忆带凋落，聊天记录独立存储，互不干扰。
+- **转接人工**：行为明确，清空记忆、推送历史、实时转发，结束时可保留或删除记录。
+- **配置驱动 + 热重载**：几乎所有参数可运行时调整。
+- **管理 API 完备**：提供配置、状态、日志、会话列表/内容、强制操作等一切运维所需。
