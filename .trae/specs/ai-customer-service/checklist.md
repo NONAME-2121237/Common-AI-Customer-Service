@@ -1,0 +1,28 @@
+- [ ] Checkpoint 1: 项目结构正确创建，依赖安装成功
+- [ ] Checkpoint 2: config.yaml 可正确加载并解析环境变量占位符
+- [ ] Checkpoint 3: 配置管理器支持点号路径读取
+- [ ] Checkpoint 4: 配置修改后热重载生效（<5秒）
+- [ ] Checkpoint 5: Redis 连接池正常工作，会话数据正确存储和查询
+- [ ] Checkpoint 6: 供应商管理器正确创建和管理供应商实例
+- [ ] Checkpoint 7: 模型别名正确解析
+- [ ] Checkpoint 8: 任务执行器各任务正确绑定模型并返回预期结果
+- [ ] Checkpoint 9: 短期记忆凋落算法正确执行（时间因子×0.4 + 重要性×0.6）
+- [ ] Checkpoint 10: 聊天记录独立存储，与短期记忆分离
+- [ ] Checkpoint 11: 会话状态正确转换（active→transferred→active）
+- [ ] Checkpoint 12: 转接时清空短期记忆，推送历史记录
+- [ ] Checkpoint 13: 空闲超时后会话正确关闭
+- [ ] Checkpoint 14: 转接期间消息直接转发至 forward.url
+- [ ] Checkpoint 15: 推送与转发消息格式正确（session_id, user_id, sender, content, timestamp）
+- [ ] Checkpoint 16: Agent 编排状态图正确执行各节点
+- [ ] Checkpoint 17: 输入打断机制生效
+- [ ] Checkpoint 18: POST /v1/chat 返回正确格式响应
+- [ ] Checkpoint 19: 新用户创建新会话，已有用户使用现有会话
+- [ ] Checkpoint 20: 管理 API 认证机制生效（未授权返回 401）
+- [ ] Checkpoint 21: 敏感配置字段脱敏显示
+- [ ] Checkpoint 22: 管理 API 会话管理操作正确执行（释放、转接、清空、删除）
+- [ ] Checkpoint 23: 服务启动成功，端口 8000 和 8001 监听正常
+- [ ] Checkpoint 24: 单元测试覆盖率 > 80%
+- [ ] Checkpoint 25: 集成测试覆盖正常对话、转接、超时流程
+- [ ] Checkpoint 26: 日志级别可动态调整
+- [ ] Checkpoint 27: 供应商热重载重建后使用新配置处理请求
+- [ ] Checkpoint 28: 自动释放转接功能生效
