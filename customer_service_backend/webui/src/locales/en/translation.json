@@ -1,130 +1,149 @@
-export default {
-  common: {
-    appName: 'Customer Service Admin',
-    login: 'Login',
-    logout: 'Logout',
-    save: 'Save',
-    cancel: 'Cancel',
-    confirm: 'Confirm',
-    delete: 'Delete',
-    edit: 'Edit',
-    add: 'Add',
-    search: 'Search',
-    refresh: 'Refresh',
-    loading: 'Loading...',
-    noData: 'No data',
-    success: 'Operation successful',
-    error: 'Operation failed',
-    warning: 'Warning',
-    info: 'Info'
+{
+  "common": {
+    "appName": "Customer Service Admin",
+    "login": "Login",
+    "logout": "Logout",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "refresh": "Refresh",
+    "loading": "Loading...",
+    "noData": "No data",
+    "success": "Operation successful",
+    "error": "Operation failed",
+    "warning": "Warning",
+    "info": "Info",
+    "welcome": "Welcome",
+    "all": "All",
+    "actions": "Actions"
   },
-  menu: {
-    dashboard: 'Dashboard',
-    sessions: 'Sessions',
-    conversations: 'Conversation List',
-    chat: 'Manual Service',
-    knowledge: 'Knowledge Base',
-    users: 'User Management',
-    settings: 'Settings',
-    profile: 'Profile'
+  "menu": {
+    "dashboard": "Dashboard",
+    "sessions": "Sessions",
+    "conversations": "Conversation List",
+    "chat": "Manual Service",
+    "knowledge": "Knowledge Base",
+    "users": "User Management",
+    "settings": "Settings",
+    "profile": "Profile"
   },
-  auth: {
-    loginTitle: 'Customer Service Admin',
-    username: 'Username',
-    password: 'Password',
-    loginButton: 'Login',
-    loginSuccess: 'Login successful',
-    loginFailed: 'Invalid username or password',
-    logoutSuccess: 'Logged out successfully',
-    sessionExpired: 'Session expired, please login again',
-    noPermission: 'You do not have permission to access this page'
+  "auth": {
+    "loginTitle": "Customer Service Admin",
+    "username": "Username",
+    "password": "Password",
+    "loginButton": "Login",
+    "loginSuccess": "Login successful",
+    "loginFailed": "Invalid username or password",
+    "logoutSuccess": "Logged out successfully",
+    "sessionExpired": "Session expired, please login again",
+    "noPermission": "You do not have permission to access this page"
   },
-  roles: {
-    superAdmin: 'Super Admin',
-    admin: 'Admin',
-    user: 'User',
-    viewer: 'Viewer'
+  "roles": {
+    "superAdmin": "Super Admin",
+    "admin": "Admin",
+    "user": "User",
+    "viewer": "Viewer"
   },
-  permissions: {
-    viewSessions: 'View Sessions',
-    chatSessions: 'Chat Service',
-    replySessions: 'Reply Sessions',
-    manageUsers: 'Manage Users',
-    manageConfig: 'Manage Config',
-    assignRoles: 'Assign Roles'
+  "permissions": {
+    "viewSessions": "View Sessions",
+    "chatSessions": "Chat Service",
+    "replySessions": "Reply Sessions",
+    "manageUsers": "Manage Users",
+    "manageConfig": "Manage Config",
+    "assignRoles": "Assign Roles",
+    "title": "Permissions"
   },
-  dashboard: {
-    title: 'Dashboard',
-    totalSessions: 'Total Sessions',
-    activeSessions: 'Active Sessions',
-    transferredSessions: 'Transferred Sessions',
-    todayConversations: 'Today Conversations'
+  "dashboard": {
+    "title": "Dashboard",
+    "totalSessions": "Total Sessions",
+    "activeSessions": "Active Sessions",
+    "transferredSessions": "Transferred Sessions",
+    "todayConversations": "Today Conversations"
   },
-  sessions: {
-    title: 'Session Management',
-    sessionList: 'Session List',
-    userId: 'User ID',
-    sessionId: 'Session ID',
-    status: 'Status',
-    lastMessage: 'Last Message',
-    createdAt: 'Created At',
-    updatedAt: 'Updated At',
-    active: 'Active',
-    transferred: 'Transferred',
-    closed: 'Closed',
-    viewDetail: 'View Detail',
-    transferToHuman: 'Transfer to Human',
-    viewHistory: 'View History'
+  "sessions": {
+    "title": "Session Management",
+    "sessionList": "Session List",
+    "userId": "User ID",
+    "sessionId": "Session ID",
+    "status": "Status",
+    "lastMessage": "Last Message",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At",
+    "active": "Active",
+    "transferred": "Transferred",
+    "closed": "Closed",
+    "viewDetail": "View Detail",
+    "transferToHuman": "Transfer to Human",
+    "viewHistory": "View History"
   },
-  chat: {
-    title: 'Manual Service',
-    placeholder: 'Please enter message...',
-    send: 'Send',
-    transferToAgent: 'Transfer to AI',
-    endChat: 'End Chat',
-    systemMessage: 'System Message',
-    customerMessage: 'Customer Message',
-    agentMessage: 'Agent Message'
+  "chat": {
+    "title": "Manual Service",
+    "placeholder": "Please enter message...",
+    "send": "Send",
+    "transferToAgent": "Transfer to AI",
+    "endChat": "End Chat",
+    "systemMessage": "System Message",
+    "customerMessage": "Customer Message",
+    "agentMessage": "Agent Message"
   },
-  users: {
-    title: 'User Management',
-    userList: 'User List',
-    username: 'Username',
-    email: 'Email',
-    role: 'Role',
-    status: 'Status',
-    createdAt: 'Created At',
-    lastLogin: 'Last Login',
-    addUser: 'Add User',
-    editUser: 'Edit User',
-    deleteUser: 'Delete User',
-    resetPassword: 'Reset Password',
-    enabled: 'Enabled',
-    disabled: 'Disabled',
-    confirmDelete: 'Confirm delete this user?'
+  "users": {
+    "title": "User Management",
+    "userList": "User List",
+    "username": "Username",
+    "email": "Email",
+    "role": "Role",
+    "status": "Status",
+    "createdAt": "Created At",
+    "lastLogin": "Last Login",
+    "addUser": "Add User",
+    "editUser": "Edit User",
+    "deleteUser": "Delete User",
+    "resetPassword": "Reset Password",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "confirmDelete": "Confirm delete this user?"
   },
-  settings: {
-    title: 'Settings',
-    general: 'General',
-    language: 'Language',
-    theme: 'Theme',
-    notifications: 'Notifications',
-    security: 'Security',
-    about: 'About',
-    version: 'Version',
-    configManagement: 'Config Management'
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "language": "Language",
+    "theme": "Theme",
+    "notifications": "Notifications",
+    "security": "Security",
+    "about": "About",
+    "version": "Version",
+    "configManagement": "Config Management"
   },
-  languages: {
-    zhCN: '简体中文',
-    enUS: 'English',
-    jaJP: '日本語'
+  "languages": {
+    "zhCN": "简体中文",
+    "enUS": "English",
+    "jaJP": "日本語"
   },
-  common: {
-    welcome: 'Welcome',
-    all: 'All',
-    actions: 'Actions'
-  },
-  permissions: {
-    title: 'Permissions'
+  "knowledge": {
+    "title": "Knowledge Base",
+    "documents": "Documents",
+    "config": "Configuration",
+    "test": "Test Query",
+    "document": "Document",
+    "titleField": "Title",
+    "content": "Content",
+    "type": "Type",
+    "vectorModel": "Vector Model",
+    "retrieveMode": "Retrieve Mode",
+    "similarity": "Similarity Search",
+    "mmr": "Max Marginal Relevance",
+    "hybrid": "Hybrid Search",
+    "topK": "Top-K Retrieval",
+    "threshold": "Similarity Threshold",
+    "query": "Query",
+    "queryPlaceholder": "Enter query content...",
+    "results": "Results",
+    "manual": "Manual",
+    "policy": "Policy",
+    "other": "Other"
   }
 }
