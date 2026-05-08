@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import sys
@@ -8,11 +8,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.providers import get_provider_manager
 from app.tasks import get_task_executor
+from app.auth.routes import get_current_user
 
 router = APIRouter(prefix="/providers", tags=["providers"])
 
 @router.get("")
-async def list_providers():
+async def list_providers(current_user: dict = Depends(get_current_user)):
     try:
         provider_manager = get_provider_manager()
         providers = provider_manager.list_providers()
@@ -21,7 +22,7 @@ async def list_providers():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/models")
-async def list_models():
+async def list_models(current_user: dict = Depends(get_current_user)):
     try:
         provider_manager = get_provider_manager()
         models = provider_manager.list_models()
@@ -30,7 +31,7 @@ async def list_models():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/health")
-async def health_check():
+async def health_check(current_user: dict = Depends(get_current_user)):
     try:
         provider_manager = get_provider_manager()
         health = await provider_manager.health_check_all()
@@ -41,7 +42,7 @@ async def health_check():
 router_tasks = APIRouter(prefix="/tasks", tags=["tasks"])
 
 @router_tasks.get("")
-async def list_tasks():
+async def list_tasks(current_user: dict = Depends(get_current_user)):
     try:
         task_executor = get_task_executor()
         tasks = task_executor.list_tasks()
@@ -50,7 +51,7 @@ async def list_tasks():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router_tasks.post("/{task}/model")
-async def update_task_model(task: str, model_id: str):
+async def update_task_model(task: str, model_id: str, current_user: dict = Depends(get_current_user)):
     try:
         task_executor = get_task_executor()
         success = await task_executor.update_task_model(task, model_id)
@@ -64,7 +65,7 @@ async def update_task_model(task: str, model_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/components/status")
-async def component_status():
+async def component_status(current_user: dict = Depends(get_current_user)):
     try:
         provider_manager = get_provider_manager()
         providers = await provider_manager.health_check_all()

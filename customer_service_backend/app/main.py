@@ -14,6 +14,10 @@ from app.memory import RedisShortTermMemory, RedisConversationHistory, SessionMa
 from app.tasks import TaskExecutor
 from app.agents import CustomerServiceAgent
 from app.routing import MessageForwarder
+from app.auth import user_store
+from app.auth.routes import router as auth_router, get_current_user
+from app.auth.user_routes import router as user_router
+from app.admin import router as admin_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -79,6 +83,10 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutdown")
 
 app = FastAPI(title="Customer Service Backend", lifespan=lifespan)
+
+app.include_router(auth_router)
+app.include_router(user_router)
+app.include_router(admin_router)
 
 @app.post("/v1/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):

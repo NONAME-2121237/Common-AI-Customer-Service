@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Dict, Any
 
 from ..config import get_config_manager
+from ..auth.routes import get_current_user
 
 router = APIRouter(prefix="/config", tags=["config"])
 
@@ -14,7 +15,7 @@ class RawConfigUpdate(BaseModel):
     content: str
 
 @router.get("")
-async def get_config():
+async def get_config(current_user: dict = Depends(get_current_user)):
     config_manager = get_config_manager()
     config = config_manager.load()
     
@@ -38,7 +39,7 @@ async def get_config():
     return safe_config
 
 @router.put("")
-async def update_config(update: ConfigUpdate):
+async def update_config(update: ConfigUpdate, current_user: dict = Depends(get_current_user)):
     config_manager = get_config_manager()
     try:
         config_manager.save_config({update.path: update.value})
@@ -47,12 +48,12 @@ async def update_config(update: ConfigUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/raw")
-async def get_raw_config():
+async def get_raw_config(current_user: dict = Depends(get_current_user)):
     config_manager = get_config_manager()
     return {"content": config_manager.get_raw()}
 
 @router.put("/raw")
-async def update_raw_config(update: RawConfigUpdate):
+async def update_raw_config(update: RawConfigUpdate, current_user: dict = Depends(get_current_user)):
     config_manager = get_config_manager()
     try:
         with open('config.yaml', 'w', encoding='utf-8') as f:

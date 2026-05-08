@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.memory import SessionManager, RedisShortTermMemory, RedisConversationHistory
+from app.auth.routes import get_current_user
 
 router = APIRouter(prefix="/session", tags=["session"])
 
@@ -35,6 +36,7 @@ async def get_conversation_history():
 
 @router.get("/transferred")
 async def list_transferred_sessions(
+    current_user: dict = Depends(get_current_user),
     session_mgr: SessionManager = Depends(get_session_manager)
 ):
     try:
@@ -46,6 +48,7 @@ async def list_transferred_sessions(
 @router.post("/release")
 async def release_session(
     request: ReleaseRequest,
+    current_user: dict = Depends(get_current_user),
     session_mgr: SessionManager = Depends(get_session_manager)
 ):
     try:
@@ -72,6 +75,7 @@ async def release_session(
 @router.post("/transfer")
 async def transfer_session(
     request: TransferRequest,
+    current_user: dict = Depends(get_current_user),
     session_mgr: SessionManager = Depends(get_session_manager),
     memory: RedisShortTermMemory = Depends(get_memory)
 ):
@@ -88,6 +92,7 @@ async def transfer_session(
 @router.post("/clear")
 async def clear_session(
     request: ClearRequest,
+    current_user: dict = Depends(get_current_user),
     session_mgr: SessionManager = Depends(get_session_manager)
 ):
     try:
@@ -99,6 +104,7 @@ async def clear_session(
 @router.post("/prune")
 async def prune_memory(
     request: PruneRequest,
+    current_user: dict = Depends(get_current_user),
     memory: RedisShortTermMemory = Depends(get_memory)
 ):
     try:

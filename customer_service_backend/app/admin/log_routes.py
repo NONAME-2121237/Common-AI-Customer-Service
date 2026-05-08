@@ -1,8 +1,13 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 import logging
 import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from app.auth.routes import get_current_user
 
 router = APIRouter(prefix="/logs", tags=["logs"])
 
@@ -10,7 +15,7 @@ class LogLevelUpdate(BaseModel):
     level: str
 
 @router.get("")
-async def get_logs(lines: Optional[int] = 100):
+async def get_logs(lines: Optional[int] = 100, current_user: dict = Depends(get_current_user)):
     try:
         log_file = "logs/app.log"
         
@@ -27,7 +32,7 @@ async def get_logs(lines: Optional[int] = 100):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/level")
-async def update_log_level(update: LogLevelUpdate):
+async def update_log_level(update: LogLevelUpdate, current_user: dict = Depends(get_current_user)):
     try:
         valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
         level = update.level.upper()

@@ -5,5 +5,6 @@ httpx==0.26.0
 redis==5.0.1
 PyYAML==6.0.1
 langgraph==0.0.20
+PyJWT==2.8.0
 pytest==7.4.4
 pytest-asyncio==0.23.3
