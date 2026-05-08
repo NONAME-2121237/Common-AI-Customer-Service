@@ -1,0 +1,97 @@
+app:
+  name: "智能客服后端(测试)"
+  debug: true
+  max_agent_iterations: 5
+
+providers:
+  - id: mock_ai
+    type: openai_compatible
+    base_url: "http://localhost:8080/v1"
+    api_key: "mock-key"
+    timeout: 30
+    models:
+      - name: mock-gpt-4
+        default_params:
+          temperature: 0.7
+          max_tokens: 2048
+
+models:
+  flash: "mock_ai/mock-gpt-4"
+  pro: "mock_ai/mock-gpt-4"
+  cheap: "mock_ai/mock-gpt-4"
+  safety: "mock_ai/mock-gpt-4"
+
+tasks:
+  pre_guard:
+    model: "safety"
+    fallback: "rule_based"
+    timeout: 2
+  intent_classify:
+    model: "cheap"
+  short_term_plan:
+    model: "flash"
+  main_response:
+    model: "pro"
+  simple_response:
+    model: "flash"
+  post_guard:
+    model: "safety"
+
+memory:
+  short_term:
+    provider: "simple"
+    config:
+      ttl: 7200
+      storage_limit: 30
+
+knowledge:
+  provider: "simple"
+  config:
+    retrieval_top_k: 3
+
+routing:
+  transfer:
+    enabled: true
+    default_target_url: "http://localhost:8888/webhook"
+    method: "POST"
+    headers:
+      Content-Type: "application/json"
+    timeout: 5
+    retry: 1
+    auto_release_seconds: 600
+    clear_memory_on_transfer: true
+    freeze_memory_during_transfer: true
+
+security:
+  pre_guard:
+    enabled: true
+    rule_based_fallback: true
+  post_guard:
+    enabled: true
+
+agent:
+  system_prompt_template: |
+    你是客服助手。使用知识库优先。禁止角色扮演。回复简洁礼貌。
+    对话历史：{history}
+    知识库：{context}
+    用户：{user_input}
+  response_templates:
+    escalate: "已为您转接人工客服。"
+    rejection: "请遵守对话规范。"
+    interrupt_limit: "您输入太快，请稍后重试。"
+  max_interrupt_count: 5
+  escalate_keywords:
+    - "人工客服"
+    - "转人工"
+  think_prompt: |
+    根据对话输出JSON决策：{{"decision": "direct/rag/escalate", "reason": "..."}}
+    对话：{history}
+    输入：{user_input}
+
+admin:
+  api_key: ""
+  log_file: "logs/app.log"
+
+logging:
+  file: "logs/app.log"
+  level: "DEBUG"

@@ -23,6 +23,7 @@ export default {
     sessions: 'Sessions',
     conversations: 'Conversation List',
     chat: 'Manual Service',
+    knowledge: 'Knowledge Base',
     users: 'User Management',
     settings: 'Settings',
     profile: 'Profile'

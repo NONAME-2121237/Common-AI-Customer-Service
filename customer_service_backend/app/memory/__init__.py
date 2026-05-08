@@ -1,13 +1,20 @@
 from .base import Memory
-from .redis_score import RedisShortTermMemory
-from .session_manager import SessionManager
-from .conversation_history_base import ConversationHistory
-from .conversation_history import RedisConversationHistory
+from .simple import SimpleMemory, SimpleConversationHistory, SimpleSessionManager
+
+def RedisShortTermMemory(*args, **kwargs):
+    raise ImportError("Redis not installed. Set USE_SIMPLE_MEMORY=true")
+
+def RedisConversationHistory(*args, **kwargs):
+    raise ImportError("Redis not installed. Set USE_SIMPLE_MEMORY=true")
+
+def SessionManager(*args, **kwargs):
+    raise ImportError("Redis not installed. Set USE_SIMPLE_MEMORY=true")
 
 __all__ = [
-    'Memory', 
+    'Memory',
     'RedisShortTermMemory',
     'SessionManager',
-    'ConversationHistory',
-    'RedisConversationHistory'
+    'SimpleMemory',
+    'SimpleConversationHistory',
+    'SimpleSessionManager'
 ]

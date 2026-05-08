@@ -8,6 +8,7 @@ import Sessions from './pages/Sessions';
 import Chat from './pages/Chat';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
+import Knowledge from './pages/Knowledge';
 import NoPermission from './pages/NoPermission';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; permission?: string }> = ({ 
@@ -44,6 +45,7 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="sessions" element={<Sessions />} />
           <Route path="chat/:sessionId?" element={<Chat />} />
+          <Route path="knowledge" element={<Knowledge />} />
           <Route path="users" element={<Users />} />
           <Route path="settings" element={<Settings />} />
         </Route>

@@ -24,6 +24,7 @@ const Layout: React.FC = () => {
     { path: '/dashboard', label: t('menu.dashboard'), icon: '📊', permission: 'view_sessions' },
     { path: '/sessions', label: t('menu.conversations'), icon: '💬', permission: 'view_sessions' },
     { path: '/chat', label: t('menu.chat'), icon: '🎧', permission: 'chat_sessions' },
+    { path: '/knowledge', label: t('menu.knowledge'), icon: '🧠', permission: 'manage_config' },
     { path: '/users', label: t('menu.users'), icon: '👥', permission: 'manage_users' },
     { path: '/settings', label: t('menu.settings'), icon: '⚙️', permission: undefined }
   ];

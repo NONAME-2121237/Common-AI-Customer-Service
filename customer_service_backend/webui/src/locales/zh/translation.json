@@ -23,6 +23,7 @@ export default {
     sessions: '会话管理',
     conversations: '会话列表',
     chat: '人工服务',
+    knowledge: '知识库配置',
     users: '用户管理',
     settings: '系统设置',
     profile: '个人中心'
@@ -122,6 +123,29 @@ export default {
     welcome: '欢迎',
     all: '全部',
     actions: '操作'
+  },
+  knowledge: {
+    title: '知识库配置',
+    documents: '文档管理',
+    config: '配置设置',
+    test: '测试查询',
+    document: '文档',
+    titleField: '标题',
+    content: '内容',
+    type: '类型',
+    vectorModel: '向量模型',
+    retrieveMode: '检索模式',
+    similarity: '相似度搜索',
+    mmr: '最大边际相关性',
+    hybrid: '混合搜索',
+    topK: 'Top-K 检索数量',
+    threshold: '相似度阈值',
+    query: '查询内容',
+    queryPlaceholder: '输入要查询的内容...',
+    results: '查询结果',
+    manual: '使用手册',
+    policy: '政策文档',
+    other: '其他'
   },
   permissions: {
     title: '权限'

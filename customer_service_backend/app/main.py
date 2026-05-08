@@ -1,5 +1,6 @@
 import logging
 import sys
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -10,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.config import get_config_manager
 from app.config.hot_reloader import ConfigHotReloader
-from app.memory import RedisShortTermMemory, RedisConversationHistory, SessionManager
 from app.tasks import TaskExecutor
 from app.agents import CustomerServiceAgent
 from app.routing import MessageForwarder
@@ -18,6 +18,22 @@ from app.auth import user_store
 from app.auth.routes import router as auth_router, get_current_user
 from app.auth.user_routes import router as user_router
 from app.admin import router as admin_router
+from app.kb import router as kb_router
+
+USE_SIMPLE_MEMORY = os.environ.get("USE_SIMPLE_MEMORY", "true").lower() == "true"
+
+if USE_SIMPLE_MEMORY:
+    from app.memory.simple import SimpleMemory, SimpleConversationHistory, SimpleSessionManager as SimpleSessionMgr
+    MemoryClass = SimpleMemory
+    HistoryClass = SimpleConversationHistory
+    SessionMgrClass = SimpleSessionMgr
+else:
+    from app.memory.redis_score import RedisShortTermMemory
+    from app.memory.conversation_history import RedisConversationHistory
+    from app.memory.session_manager import SessionManager
+    MemoryClass = RedisShortTermMemory
+    HistoryClass = RedisConversationHistory
+    SessionMgrClass = SessionManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,9 +41,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-memory: RedisShortTermMemory = None
-conversation_history: RedisConversationHistory = None
-session_manager: SessionManager = None
+memory = None
+conversation_history = None
+session_manager = None
 task_executor: TaskExecutor = None
 agent: CustomerServiceAgent = None
 forwarder: MessageForwarder = None
@@ -47,30 +63,30 @@ class ChatResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global memory, conversation_history, session_manager, task_executor, agent, forwarder, config_manager, hot_reloader
-    
+
     config_manager = get_config_manager()
-    
+
     def on_config_reload():
         logger.info("Configuration reloaded")
-    
+
     hot_reloader = ConfigHotReloader(
         config_path='config.yaml',
         callback=lambda: config_manager.reload()
     )
     hot_reloader.start()
-    
-    memory = RedisShortTermMemory()
-    conversation_history = RedisConversationHistory()
-    session_manager = SessionManager()
+
+    memory = MemoryClass()
+    conversation_history = HistoryClass()
+    session_manager = SessionMgrClass()
     task_executor = TaskExecutor()
     forwarder = MessageForwarder()
-    
+
     agent = CustomerServiceAgent(memory, conversation_history, task_executor)
-    
-    logger.info("Application started")
-    
+
+    logger.info(f"Application started (USE_SIMPLE_MEMORY={USE_SIMPLE_MEMORY})")
+
     yield
-    
+
     if memory:
         await memory.close()
     if conversation_history:
@@ -79,7 +95,7 @@ async def lifespan(app: FastAPI):
         await session_manager.close()
     if hot_reloader:
         hot_reloader.stop()
-    
+
     logger.info("Application shutdown")
 
 app = FastAPI(title="Customer Service Backend", lifespan=lifespan)
@@ -87,14 +103,15 @@ app = FastAPI(title="Customer Service Backend", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(admin_router)
+app.include_router(kb_router)
 
 @app.post("/v1/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
         session_id = await session_manager.get_or_create_session(request.user_id)
-        
+
         session_state = await session_manager.get_session_state(session_id)
-        
+
         if session_state and session_state.get('status') == 'transferred':
             await forwarder.forward_message(
                 session_id=session_id,
@@ -102,34 +119,34 @@ async def chat(request: ChatRequest):
                 message=request.user_input,
                 conversation_history=await conversation_history.get_history(session_id)
             )
-            
+
             return ChatResponse(
                 response="您当前在人工客服，请稍候...",
                 session_id=session_id,
                 user_id=request.user_id,
                 should_escalate=True
             )
-        
+
         result = await agent.process(
             session_id=session_id,
             user_id=request.user_id,
             user_input=request.user_input
         )
-        
+
         return ChatResponse(
             response=result['response'],
             session_id=session_id,
             user_id=request.user_id,
             should_escalate=result.get('should_escalate', False)
         )
-        
+
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "simple_memory": USE_SIMPLE_MEMORY}
 
 if __name__ == "__main__":
     import uvicorn

@@ -6,8 +6,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.memory import SessionManager, RedisShortTermMemory, RedisConversationHistory
 from app.auth.routes import get_current_user
+import os
+
+if os.environ.get("USE_SIMPLE_MEMORY", "true").lower() == "true":
+    from app.memory.simple import SimpleSessionManager, SimpleMemory, SimpleConversationHistory
+    SessionMgrClass = SimpleSessionManager
+    MemoryClass = SimpleMemory
+    HistoryClass = SimpleConversationHistory
+else:
+    from app.memory.redis_score import RedisShortTermMemory
+    from app.memory.conversation_history import RedisConversationHistory
+    from app.memory.session_manager import SessionManager
+    SessionMgrClass = SessionManager
+    MemoryClass = RedisShortTermMemory
+    HistoryClass = RedisConversationHistory
 
 router = APIRouter(prefix="/session", tags=["session"])
 
@@ -26,18 +39,18 @@ class PruneRequest(BaseModel):
     session_id: str
 
 async def get_session_manager():
-    return SessionManager()
+    return SessionMgrClass()
 
 async def get_memory():
-    return RedisShortTermMemory()
+    return MemoryClass()
 
 async def get_conversation_history():
-    return RedisConversationHistory()
+    return HistoryClass()
 
 @router.get("/transferred")
 async def list_transferred_sessions(
     current_user: dict = Depends(get_current_user),
-    session_mgr: SessionManager = Depends(get_session_manager)
+    session_mgr = Depends(get_session_manager)
 ):
     try:
         sessions = await session_mgr.list_transferred_sessions()
@@ -49,7 +62,7 @@ async def list_transferred_sessions(
 async def release_session(
     request: ReleaseRequest,
     current_user: dict = Depends(get_current_user),
-    session_mgr: SessionManager = Depends(get_session_manager)
+    session_mgr = Depends(get_session_manager)
 ):
     try:
         session_id = request.session_id
@@ -57,15 +70,15 @@ async def release_session(
             user_session = await session_mgr.get_user_session(request.user_id)
             if user_session:
                 session_id = user_session.get('session_id')
-        
+
         if not session_id:
             raise HTTPException(status_code=400, detail="session_id or user_id required")
-        
+
         await session_mgr.release_session(session_id)
-        
+
         if request.clear_memory:
             await session_mgr.clear_session(session_id)
-        
+
         return {"status": "success", "session_id": session_id}
     except HTTPException:
         raise
@@ -76,15 +89,15 @@ async def release_session(
 async def transfer_session(
     request: TransferRequest,
     current_user: dict = Depends(get_current_user),
-    session_mgr: SessionManager = Depends(get_session_manager),
-    memory: RedisShortTermMemory = Depends(get_memory)
+    session_mgr = Depends(get_session_manager),
+    memory = Depends(get_memory)
 ):
     try:
         session_id = await session_mgr.get_or_create_session(request.user_id)
-        
+
         await memory.reset(session_id)
         await session_mgr.set_session_transferred(session_id)
-        
+
         return {"status": "success", "session_id": session_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -93,7 +106,7 @@ async def transfer_session(
 async def clear_session(
     request: ClearRequest,
     current_user: dict = Depends(get_current_user),
-    session_mgr: SessionManager = Depends(get_session_manager)
+    session_mgr = Depends(get_session_manager)
 ):
     try:
         await session_mgr.clear_session(request.session_id)
@@ -105,10 +118,10 @@ async def clear_session(
 async def prune_memory(
     request: PruneRequest,
     current_user: dict = Depends(get_current_user),
-    memory: RedisShortTermMemory = Depends(get_memory)
+    memory = Depends(get_memory)
 ):
     try:
-        await memory.prune(request.session_id)
+        await memory.clear(request.session_id)
         return {"status": "success", "session_id": request.session_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

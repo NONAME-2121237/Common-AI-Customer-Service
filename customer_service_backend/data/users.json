@@ -1,0 +1,22 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "username": "admin",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "role": "super_admin",
+      "permissions": [
+        "view_sessions",
+        "chat_sessions",
+        "reply_sessions",
+        "manage_users",
+        "manage_config",
+        "assign_roles",
+        "manage_admins"
+      ],
+      "status": "active",
+      "created_at": 1778220667.1932957,
+      "last_login": 1778220921.6701128
+    }
+  ]
+}
